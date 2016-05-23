@@ -12,7 +12,7 @@ def print_year_month_value(part):
     return ''.join([year, '-', month])
 
 def print_where_clause(part_field, part_string):
-    return ''.join([' where ', part_field, '=', part_string])
+    return ''.join([' where ', part_field, '=\'', part_string, '\''])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
@@ -20,9 +20,9 @@ if __name__ == '__main__':
     group.add_argument('--update', action='store_true',  help='update or create partitions' )
     group.add_argument('--merge', action='store_true', help='merge small files')
 
-    parser.add_argument('--targetDB', default='postgres',  help='target database')
+    parser.add_argument('--targetDB', default='postgres_refined',  help='target database')
     parser.add_argument('--targetTable', default='', help= 'target table')
-    parser.add_argument('--sourceDB', default='postgres_refined', help='source database')
+    parser.add_argument('--sourceDB', default='postgres', help='source database')
     parser.add_argument('--sourceTable', default='', help='source table')
     parser.add_argument('--partitionField', default='updated_at', help='partition fields')
 
@@ -54,10 +54,10 @@ if __name__ == '__main__':
                     schema_string += ''.join([field_name, ' ', field_type, ','])
                 schema_string = schema_string.rstrip(',')
 
-                impala_db.create_partitions({'target_db':'postgres_refined', 'target_table':'jtest_python', 'schema':schema_string,
+                impala_db.create_partitions({'target_db':args.targetDB, 'target_table':args.targetTable, 'schema':schema_string,
                                              'partition_clause': 'partitioned by (year smallint, month smallint) ', 'table_format':'parquet'})
                 part_string = ''.join(['substr(', args.partitionField, ',1,4), ', 'substr(', args.partitionField, ', 6,2) '])
-                parts = impala_db.get_partitions(''.join(['select ', part_string, ' from ', args.sourceDB, '.'
+                parts = impala_db.get_partitions(''.join(['select distinct ', part_string, ' from ', args.sourceDB, '.'
                                                              , args.sourceTable, ' limit 5']))
                 for part in parts:
                     part_string = print_year_month(part)
