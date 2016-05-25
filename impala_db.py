@@ -25,10 +25,15 @@ class ImpalaDB:
       return self.execute("describe " + database + "." + table)
 
 
-  def create_partitions(self, *args, **kwargs):
+  def create_partition_table(self, *args, **kwargs):
       args = args[0]
       sql = ''.join(["create table if not exists ", args['target_db'], ".", args['target_table'], "(", args['schema'], ") ", args['partition_clause'],
                    " stored as ", args['table_format'] ])
+      self.update(sql)
+
+  def update_partition_table(self, *args, **kwargs):
+      args = args[0]
+      sql =''.join(["alter table ", args['target_db'], ".", args['target_table'], " add columns (", args['schema'], ")"])
       self.update(sql)
 
   def get_partitions(self, cmd):
