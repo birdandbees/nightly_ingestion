@@ -1,4 +1,4 @@
-import warnings
+#!/usr/bin/env python
 import logging as lg
 import argparse
 from impala_db import ImpalaDB
@@ -29,7 +29,7 @@ def detect_schema_changes(old_schema, new_schema):
     schema_string = ''
     for field_name, field_type, _ in schema:
         schema_string += ''.join([field_name, ' ', field_type, ','])
-        schema_string = schema_string.rstrip(',')
+    schema_string = schema_string.rstrip(',')
     return update, schema_string
 
 
@@ -60,14 +60,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         if args.update:
-            with ImpalaDB('10.73.50.24', 21050) as impala_db :
+            with ImpalaDB('impala-us.ds.avant.com', 21050) as impala_db :
                 new_schema = impala_db.get_schema(args.sourceDB, args.sourceTable)
                 old_schema = impala_db.get_schema(args.targetDB, args.targetTable)
                 (update, schema_string) = detect_schema_changes(old_schema, new_schema)
                 if update:
                     impala_db.update_partitions({'target_db':args.targetDB, 'target_table':args.targetTable, 'schema':schema_string})
 
-                elif not schema_string :
+                elif schema_string :
                     impala_db.create_partition_table({'target_db': args.targetDB, 'target_table': args.targetTable, 'schema': schema_string,
                          'partition_clause': 'partitioned by (year smallint, month smallint) ', 'table_format':'parquet'})
 

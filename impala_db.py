@@ -1,6 +1,7 @@
 import warnings
 import logging
 from impala.dbapi import connect
+from impala.error import HiveServer2Error
 
 class ImpalaDB:
   def __init__(self, host, port):
@@ -22,7 +23,11 @@ class ImpalaDB:
       self.cursor.execute(cmd)
 
   def get_schema(self, database, table):
-      return self.execute("describe " + database + "." + table)
+      try:
+        schema = self.execute("describe " + database + "." + table)
+        return schema
+      except HiveServer2Error:
+        return ()
 
 
   def create_partition_table(self, *args, **kwargs):
