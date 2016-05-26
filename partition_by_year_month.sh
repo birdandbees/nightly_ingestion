@@ -1,6 +1,6 @@
 #!/bin/bash
 
-file_path=`echo -e "${HDFS_INPUT_PATH}" | perl -pe 's/(.*)\/(.*?)_incr/\2/'`
+file_path=`echo -e "${WORKFLOW.HDFS_INPUT_PATH}" | perl -pe 's/(.*)\/(.*?)_incr/\2/'`
 
 if [[ -z ${file_path} ]]
 then
