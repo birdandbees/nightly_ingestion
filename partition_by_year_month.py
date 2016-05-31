@@ -7,6 +7,8 @@ from impala.error import  DatabaseError
 def print_year_month(part):
     #for year, month in part:
     (year, month) = part
+    if not ( year > 2000 and year <= 2050) or not ( month > 0 and month < 13):
+        return None
     return ''.join([' partition( year=', year, ', month=', month, ') '])
 
 def print_year_month_value(part):
@@ -17,18 +19,18 @@ def print_where_clause(part_field, part_string):
     return ''.join([' where ', part_field, '=\'', part_string, '\''])
 
 def detect_schema_changes(old_schema, new_schema):
-    off_set = len(old_schema) - len(new_schema)
+    off_set = len(old_schema) - len(new_schema) - 2
     if off_set == 0:
         return (0, '')
     if off_set < -2:
         schema = new_schema
         update = 0
     else:
-        schema = new_schema[off_set:]
+        schema = new_schema[off_set - 2 :-2]
         update = 1
     schema_string = ''
     for field_name, field_type, _ in schema:
-        schema_string += ''.join([field_name, ' ', field_type, ','])
+        schema_string += ''.join(['`', field_name, '`',  ' ', field_type, ','])
     schema_string = schema_string.rstrip(',')
     return update, schema_string
 
@@ -60,7 +62,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         if args.update:
-            with ImpalaDB('impala-us.ds.avant.com', 21050) as impala_db :
+            with ImpalaDB('10.73.50.23', 21050) as impala_db :
                 new_schema = impala_db.get_schema(args.sourceDB, args.sourceTable)
                 old_schema = impala_db.get_schema(args.targetDB, args.targetTable)
                 (update, schema_string) = detect_schema_changes(old_schema, new_schema)
@@ -73,11 +75,12 @@ if __name__ == '__main__':
 
                 part_string = ''.join(['substr(', args.partitionField, ',1,4), ', 'substr(', args.partitionField, ', 6,2) '])
                 parts = impala_db.get_partitions(''.join(['select distinct ', part_string, ' from ', args.sourceDB, '.'
-                                                             , args.sourceTable, ' limit 5']))
+                                                             , args.sourceTable]))
                 for part in parts:
                     part_string = print_year_month(part)
                     year_month = print_year_month_value(part)
-                    impala_db.update_partitions({'target_db':args.targetDB, 'source_db':args.sourceDB, 'target_table':args.targetTable,
+                    if part_string is not None:
+                        impala_db.update_partitions({'target_db':args.targetDB, 'source_db':args.sourceDB, 'target_table':args.targetTable,
                                              'source_table':args.sourceTable, 'part_clause':part_string, 'where_clause':
                                                  print_where_clause('substr(updated_at, 1, 7)', year_month)})
 
