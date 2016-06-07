@@ -46,4 +46,4 @@ if __name__ == '__main__':
 
         """)
         sql = ctas.safe_substitute(table_name='postgres_refined' + '.' + args.viewTable, old_table_name=args.targetDB + '.postgres_avant_basic_us_'+ args.targetTable + '_1', select=select_str )
-        impala_db.update_partitions(sql)
+        impala_db.update(sql)
