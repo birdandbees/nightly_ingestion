@@ -62,7 +62,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         if args.update:
-            with ImpalaDB('10.73.50.23', 21050) as impala_db :
+            with ImpalaDB('impala-us.ds.avant.com', 21050) as impala_db :
                 new_schema = impala_db.get_schema(args.sourceDB, args.sourceTable)
                 old_schema = impala_db.get_schema(args.targetDB, args.targetTable)
                 (update, schema_string) = detect_schema_changes(old_schema, new_schema)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
                     if part_string is not None:
                         impala_db.update_partitions({'target_db':args.targetDB, 'source_db':args.sourceDB, 'target_table':args.targetTable,
                                              'source_table':args.sourceTable, 'part_clause':part_string, 'where_clause':
-                                                 print_where_clause('substr(updated_at, 1, 7)', year_month)})
+                                                 print_where_clause(''.join(['substr(', args.partitionField, ', 1, 7)']), year_month)})
 
     except DatabaseError:
         lg.fatal('Impala DB operations failed!')
