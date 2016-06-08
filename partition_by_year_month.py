@@ -6,10 +6,13 @@ from impala.error import  DatabaseError
 
 def print_year_month(part):
     #for year, month in part:
-    (year, month) = part
-    if not ( int(year) > 2000 and int(year) <= 2050) or not ( int(month) > 0 and int(month) < 13):
+    try:
+        (year, month) = part
+        if not ( int(year) > 2000 and int(year) <= 2050) or not ( int(month) > 0 and int(month) < 13):
+            return None
+        return ''.join([' partition( year=', year, ', month=', month, ') '])
+    except:
         return None
-    return ''.join([' partition( year=', year, ', month=', month, ') '])
 
 def print_year_month_value(part):
     (year, month) = part
