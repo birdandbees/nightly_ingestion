@@ -25,13 +25,20 @@ if __name__ == '__main__':
     lg.getLogger('').addHandler(console)
 
     args = parser.parse_args()
-    with ImpalaDB('impala-us.ds.avant.com', 21050) as impala_db:
-        schema = impala_db.get_schema(args.targetDB, 'postgres_avant_basic_us_' + args.targetTable + '_1')
+    with ImpalaDB('kbor-shall-be-castrated.com', 21050) as impala_db:
+        schema = impala_db.get_schema(args.targetDB, 'postgres_us_' + args.targetTable + '_1')
+        year = ('part_year', 'tinyint', '')
         id = ('id', 'int', '')
         select_str =''
-        if id not in schema:
-            raise ValueError('Table does not have id field')
-        schema.pop(0)
+        if year not in schema and id in schema:
+            schema.pop(0)
+            # non-partitioned table
+            #raise ValueError('Table does not have id field')
+        else:
+            schema.pop(0)
+            schema.pop()
+            schema.pop()
+
         for field_name, field_type, _ in schema:
             select_str += 'c.' + field_name + ','
         select_str = select_str.rstrip(',')
@@ -40,10 +47,10 @@ if __name__ == '__main__':
         create table $table_name stored as parquet as
         select a.id, $select
         from
-        (select id, max(updated_at) as updated_at from $old_table_name group by id ) a
-        left anti join postgres.postgres_avant_basic_us_deleted_entries_1 b on a.id = b.id and b.table_name='$old_table_name'
+        (select id, distinct(max(updated_at)) as updated_at from $old_table_name group by id ) a
+        left anti join postgres.postgres_us_deleted_entries_1 b on a.id = b.id and b.table_name='$old_table_name'
         inner join $old_table_name c on a.id = c.id and a.updated_at = c.updated_at
 
         """)
-        sql = ctas.safe_substitute(table_name='postgres_refined' + '.' + args.viewTable, old_table_name=args.targetDB + '.postgres_avant_basic_us_'+ args.targetTable + '_1', select=select_str )
+        sql = ctas.safe_substitute(table_name='postgres_refined' + '.' + args.viewTable, old_table_name=args.targetDB + '.postgres_'+ args.targetTable + '_1', select=select_str )
         impala_db.update(sql)

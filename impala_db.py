@@ -4,9 +4,10 @@ from impala.dbapi import connect
 from impala.error import HiveServer2Error
 
 class ImpalaDB:
-  def __init__(self, host, port):
+  def __init__(self, host, port, logger=None):
     self.db = connect(host=host, port=port)
     self.cursor = self.db.cursor()
+    self.logger = logger or logging.getLogger(__name__)
 
   def __enter__(self):
       return self
@@ -16,12 +17,12 @@ class ImpalaDB:
       self.db.close()
 
   def execute(self, cmd):
-      logging.debug(cmd)
+      self.logger.debug(cmd)
       self.cursor.execute(cmd)
       return self.cursor.fetchall()
 
   def update(self, cmd):
-      logging.debug(cmd)
+      self.logger.debug(cmd)
       self.cursor.execute(cmd)
 
   def get_schema(self, database, table):
@@ -32,28 +33,22 @@ class ImpalaDB:
         return ()
 
 
-  def create_partition_table(self, *args, **kwargs):
-      args = args[0]
-      sql = ''.join(["create table if not exists ", args['target_db'], ".", args['target_table'], "(", args['schema'], ") ", args['partition_clause'],
-                   " stored as ", args['table_format'] ])
-      logging.debug(sql)
-      self.update(sql)
-
-  def update_partition_table(self, *args, **kwargs):
-      args = args[0]
-      sql =''.join(["alter table ", args['target_db'], ".", args['target_table'], " add columns (", args['schema'], ")"])
-      logging.debug(sql)
-      self.update(sql)
-
   def get_partitions(self, cmd):
-      logging.debug(cmd)
+      self.logger.debug(cmd)
       return self.execute(cmd)
 
   def update_partitions(self, *args, **kwargs):
       args = args[0]
       sql = ''.join(["insert into ", args['target_db'], ".", args['target_table'],  args['part_clause'],
-                      " select * from ", args['source_db'], ".", args['source_table'], args['where_clause'] ])
-      logging.debug(sql)
+                      " select ", args['schema'], " from ", args['source_db'], ".", args['source_table'], args['where_clause'] ])
+      self.logger.debug(sql)
+      self.update(sql)
+
+  def update_nonpartition(self, *args, **kwargs):
+      args = args[0]
+      sql = ''.join(["insert overwrite into", args['target_db'], ".", args['target_table'],
+                     " select ", args['schema'], " from ", args['source_db'], ".", args['source_table'] ] )
+      self.logger.debug(sql)
       self.update(sql)
 
 

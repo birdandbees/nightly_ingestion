@@ -10,32 +10,40 @@ def print_year_month(part):
         (year, month) = part
         if not ( int(year) > 2000 and int(year) <= 2050) or not ( int(month) > 0 and int(month) < 13):
             return None
-        return ''.join([' partition( year=', year, ', month=', month, ') '])
+        return ''.join([' partition( partition_year=', year, ', partition_month=', month, ') '])
     except:
         return None
 
-def print_year_month_value(part):
+
+def print_where_clause(part, partition_field):
     (year, month) = part
-    return ''.join([year, '-', month])
+    return ''.join([' where date_part(', partition_field, ',\'year\')=', year, ' and date_part(', partition_field, ',\'month\')=', month])
 
-def print_where_clause(part_field, part_string):
-    return ''.join([' where ', part_field, '=\'', part_string, '\''])
+def discover_schema(schema):
+    part = 0
+    part_year = ('partition_year', 'smallint', '')
+    part_month = ('partition_month', 'smallint', '')
+    updated_at =('updated_at', 'timestamp', '')
+    partition_field = 'updated_at'
 
-def detect_schema_changes(old_schema, new_schema):
-    off_set = len(old_schema) - len(new_schema) - 2
-    if off_set == 0:
-        return (0, '')
-    if off_set < -2:
-        schema = new_schema
-        update = 0
-    else:
-        schema = new_schema[off_set - 2 :-2]
-        update = 1
-    schema_string = ''
+    if part_year in schema:
+        schema.remove(part_year)
+        part += 1
+    if part_month in schema:
+        schema.remove(part_month)
+        part += 1
+
+    if updated_at not in schema and part != 0 :
+        partition_field = 'created_at'
+
+
+    schema_string=[]
     for field_name, field_type, _ in schema:
-        schema_string += ''.join(['`', field_name, '`',  ' ', field_type, ','])
-    schema_string = schema_string.rstrip(',')
-    return update, schema_string
+        if field_type == 'string':
+            schema_string.append(field_name)
+        else:
+            schema_string.append('cast(`' + field_name + '` as ' + field_type + ')')
+    return ','.join(schema), part, partition_field
 
 
 
@@ -49,8 +57,9 @@ if __name__ == '__main__':
     parser.add_argument('--targetTable', default='', help= 'target table')
     parser.add_argument('--sourceDB', default='postgres', help='source database')
     parser.add_argument('--sourceTable', default='', help='source table')
-    parser.add_argument('--partitionField', default='updated_at', help='partition fields')
 
+
+    # TODO move logging config to a config file
     lg.basicConfig(level=lg.DEBUG,
                    format='%(asctime)s %(name)-8s %(levelname)-5s %(message)s',
                    datefmt='%m-%d %H:%M',
@@ -65,27 +74,32 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         if args.update:
-            with ImpalaDB('impala-us.ds.avant.com', 21050) as impala_db :
-                new_schema = impala_db.get_schema(args.sourceDB, args.sourceTable)
-                old_schema = impala_db.get_schema(args.targetDB, args.targetTable)
-                (update, schema_string) = detect_schema_changes(old_schema, new_schema)
-                if update:
-                    impala_db.update_partitions({'target_db':args.targetDB, 'target_table':args.targetTable, 'schema':schema_string})
+            with ImpalaDB('kbor-shall-be-castrated.com', 21050, lg) as impala_db :
+                schema = impala_db.get_schema(args.targetDB, args.targetTable)
+                (schema_string, part, partition_field) = discover_schema(schema)
 
-                elif schema_string :
-                    impala_db.create_partition_table({'target_db': args.targetDB, 'target_table': args.targetTable, 'schema': schema_string,
-                         'partition_clause': 'partitioned by (year smallint, month smallint) ', 'table_format':'parquet'})
+                if  part == 0:
+                    # just insert
+                    impala_db.create_nonpartition_table(
+                        {'target_db': args.targetDB, 'target_table': args.targetTable, 'schema': schema_string,
+                         'table_format': 'parquet', 'source_db': args.sourceDB, 'source_table': args.sourceTable} )
+                else:
+                    # get partition list
+                    part_string = ''.join(
+                        ['date_part(', partition_field, '\'year\')', 'date_part(', partition_field, '\'month\')'])
+                    parts = impala_db.get_partitions(
+                        ''.join(['select distinct ', part_string, ' from ', args.sourceDB, '.'
+                                    , args.sourceTable]))
 
-                part_string = ''.join(['substr(', args.partitionField, ',1,4), ', 'substr(', args.partitionField, ', 6,2) '])
-                parts = impala_db.get_partitions(''.join(['select distinct ', part_string, ' from ', args.sourceDB, '.'
-                                                             , args.sourceTable]))
-                for part in parts:
-                    part_string = print_year_month(part)
-                    year_month = print_year_month_value(part)
-                    if part_string is not None:
-                        impala_db.update_partitions({'target_db':args.targetDB, 'source_db':args.sourceDB, 'target_table':args.targetTable,
-                                             'source_table':args.sourceTable, 'part_clause':part_string, 'where_clause':
-                                                 print_where_clause(''.join(['substr(', args.partitionField, ', 1, 7)']), year_month)})
+                    for part in parts:
+                        part_string = print_year_month(part)
+                        if part_string is not None:
+                            impala_db.update_partitions(
+                                {'target_db': args.targetDB, 'source_db': args.sourceDB,
+                                 'target_table': args.targetTable,
+                                 'source_table': args.sourceTable, 'part_clause': part_string, 'where_clause':
+                                     print_where_clause(part, partition_field)})
+
 
     except DatabaseError:
         lg.fatal('Impala DB operations failed!')
